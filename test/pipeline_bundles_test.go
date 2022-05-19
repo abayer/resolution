@@ -1,22 +1,22 @@
 //go:build e2e
 
 /*
-Copyright 2022 The Tekton Authors
+ Copyright 2022 The Tekton Authors
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
 */
 
-package pipeline_bundles_test
+package test
 
 import (
 	"bytes"
@@ -24,31 +24,16 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	knativetest "knative.dev/pkg/test"
+	"knative.dev/pkg/test/helpers"
 )
-
-// testNamespace is the namespace to construct and run this e2e test in.
-const testNamespace = "tekton-resolution-pipeline-bundles-test"
-
-// waitInterval is the duration between repeat attempts to check on the
-// status of the test's kubernetes resources.
-const waitInterval = time.Second
-
-// waitTimeout is the total maximum time the test may spend waiting for
-// successful creation or completion of resources deployed during this test.
-// The timeout is high because the CI/CD cluster can be slow.
-const waitTimeout = 2 * time.Minute
 
 // testBundleRefEnvVar is the name of an environment variable that's used to
 // pass the url of a bundle that can be pulled during the e2e test.
@@ -63,48 +48,16 @@ func TestPipelineBundle(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	configPath := knativetest.Flags.Kubeconfig
-	clusterName := knativetest.Flags.Cluster
+	c, ns := setup(ctx, t)
+	knativetest.CleanupOnInterrupt(func() { tearDown(ctx, t, c, ns) }, t.Logf)
+	defer tearDown(ctx, t, c, ns)
 
-	cfg, err := knativetest.BuildClientConfig(configPath, clusterName)
-
-	kubeClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		t.Fatalf("failed to create kubeclient from config file at %s: %s", configPath, err)
-	}
-
-	dynamicClient, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		t.Fatalf("failed to create dynamic client from config file at %s: %s", configPath, err)
-	}
-
-	tearDown := func() {
-		err := kubeClient.CoreV1().Namespaces().Delete(ctx, testNamespace, metav1.DeleteOptions{})
-		if err != nil {
-			t.Errorf("error deleting test namespace %q: %v", testNamespace, err)
-		}
-	}
-
-	knativetest.CleanupOnInterrupt(tearDown, t.Logf)
-	defer tearDown()
-
-	_, err = kubeClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
-			Labels: map[string]string{
-				"resolution.tekton.dev/test-e2e": "true",
-			},
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		t.Fatalf("Failed to create namespace %s for tests: %s", testNamespace, err)
-	}
-
-	pipelineRunYAML, err := os.ReadFile("./pipelinerun.yaml")
+	pipelineRunYAML, err := os.ReadFile("./pipeline_bundles_test/pipelinerun.yaml")
 	if err != nil {
 		t.Fatalf("error reading pipelinerun yaml fixture: %v", err)
 	}
 	pipelineRunYAML = bytes.Replace(pipelineRunYAML, []byte("{{bundleRef}}"), []byte(bundleRef), 1)
+	pipelineRunYAML = bytes.Replace(pipelineRunYAML, []byte("{{prName}}"), []byte(helpers.ObjectNameForTest(t)), 1)
 
 	// Create PipelineRun using dynamic client to avoid importing
 	// pipelines as dependency.
@@ -113,12 +66,13 @@ func TestPipelineBundle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error parsing into unstructured pipelinerun: %v", err)
 	}
+
 	pipelineRunGVR := schema.GroupVersionResource{
 		Group:    "tekton.dev",
 		Version:  "v1beta1",
 		Resource: "pipelineruns",
 	}
-	if _, err := dynamicClient.Resource(pipelineRunGVR).Namespace(testNamespace).Create(ctx, pipelineRun, metav1.CreateOptions{}); err != nil {
+	if _, err := c.DynamicClient.Resource(pipelineRunGVR).Namespace(ns).Create(ctx, pipelineRun, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("error creating pipelinerun object: %v", err)
 	}
 
@@ -130,7 +84,7 @@ func TestPipelineBundle(t *testing.T) {
 	}
 
 	err = wait.PollImmediate(waitInterval, waitTimeout, func() (bool, error) {
-		pr, err := dynamicClient.Resource(pipelineRunGVR).Namespace(testNamespace).Get(ctx, pipelineRunName, metav1.GetOptions{})
+		pr, err := c.DynamicClient.Resource(pipelineRunGVR).Namespace(ns).Get(ctx, pipelineRunName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("error getting pipelinerun: %v", err)
 		}
