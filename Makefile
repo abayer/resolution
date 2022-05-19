@@ -68,6 +68,21 @@ $(BIN)/ko: PACKAGE=github.com/google/ko
 apply: | $(KO) ; $(info $(M) ko apply -R -f config/) @ ## Apply config to the current cluster
 	$Q $(KO) apply -R -f config
 
+.PHONY: apply-bundleresolver
+apply-bundleresolver: | $(KO) ; $(info $(M) ko apply -R -f bundleresolver/config/) @ ## Apply config to the current cluster
+	$Q $(KO) apply -R -f bundleresolver/config
+
+.PHONY: apply-gitresolver
+apply-gitresolver: | $(KO) ; $(info $(M) ko apply -R -f gitresolver/config/) @ ## Apply config to the current cluster
+	$Q $(KO) apply -R -f gitresolver/config
+
+.PHONY: apply-demoresolver
+apply-demoresolver: | $(KO) ; $(info $(M) ko apply -R -f docs/resolver-template/config/) @ ## Apply config to the current cluster
+	$Q $(KO) apply -R -f docs/resolver-template/config
+
+.PHONY: apply-all-resolvers
+apply-all-resolvers: apply-bundleresolver apply-gitresolver apply-demoresolver
+
 .PHONY: resolve
 resolve: | $(KO) ; $(info $(M) ko resolve -R -f config/) @ ## Resolve config to the current cluster
 	$Q $(KO) resolve --push=false --oci-layout-path=$(BIN)/oci -R -f config

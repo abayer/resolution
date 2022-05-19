@@ -38,6 +38,10 @@ import (
 func TestSmoke(t *testing.T) {
 	ctx := context.Background()
 
+	c, ns := setup(ctx, t)
+	knativetest.CleanupOnInterrupt(func() { tearDown(ctx, t, c, ns) }, t.Logf)
+	defer tearDown(ctx, t, c, ns)
+
 	requestYAML, err := os.ReadFile("./smoke_test/resolution-request.yaml")
 	if err != nil {
 		t.Log(os.Getwd())
@@ -50,10 +54,7 @@ func TestSmoke(t *testing.T) {
 		t.Fatalf("error parsing resolution request yaml fixture: %v", err)
 	}
 	req.Name = helpers.ObjectNameForTest(t)
-
-	c, ns := setup(ctx, t)
-	knativetest.CleanupOnInterrupt(func() { tearDown(ctx, t, c, ns) }, t.Logf)
-	defer tearDown(ctx, t, c, ns)
+	req.Namespace = ns
 
 	_, err = c.ResolutionRequestClient.Create(ctx, req, metav1.CreateOptions{})
 	if err != nil {

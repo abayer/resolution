@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package framework
+package testing
 
 import (
 	"context"
@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/tektoncd/resolution/pkg/resolver/framework"
 
 	resolutioncommon "github.com/tektoncd/resolution/pkg/common"
 )
@@ -39,7 +41,7 @@ const (
 	FakeParamName string = "fake-key"
 )
 
-var _ Resolver = &FakeResolver{}
+var _ framework.Resolver = &FakeResolver{}
 
 // FakeResolvedResource is a framework.ResolvedResource implementation for use with the fake resolver.
 // If it's the value in the FakeResolver's ForParam map for the key given as the fake param value, the FakeResolver will
@@ -118,7 +120,7 @@ func (r *FakeResolver) ValidateParams(_ context.Context, params map[string]strin
 
 // Resolve performs the work of fetching a file from the fake resolver given a map of
 // parameters.
-func (r *FakeResolver) Resolve(_ context.Context, params map[string]string) (ResolvedResource, error) {
+func (r *FakeResolver) Resolve(_ context.Context, params map[string]string) (framework.ResolvedResource, error) {
 	paramValue := params[FakeParamName]
 
 	frr, ok := r.ForParam[paramValue]
@@ -137,7 +139,7 @@ func (r *FakeResolver) Resolve(_ context.Context, params map[string]string) (Res
 	return frr, nil
 }
 
-var _ TimedResolution = &FakeResolver{}
+var _ framework.TimedResolution = &FakeResolver{}
 
 // GetResolutionTimeout returns the configured timeout for the reconciler, or the default time.Duration if not configured.
 func (r *FakeResolver) GetResolutionTimeout(ctx context.Context, defaultTimeout time.Duration) time.Duration {
