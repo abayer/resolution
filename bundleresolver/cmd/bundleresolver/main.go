@@ -19,10 +19,12 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn/k8schain"
 	"github.com/tektoncd/resolution/bundleresolver/pkg/bundle"
+	"github.com/tektoncd/resolution/pkg/apis/resolution/v1alpha1"
 	"github.com/tektoncd/resolution/pkg/common"
 	"github.com/tektoncd/resolution/pkg/resolver/framework"
 	"k8s.io/client-go/kubernetes"
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
+	filteredinformerfactory "knative.dev/pkg/client/injection/kube/informers/factory/filtered"
 	"knative.dev/pkg/injection/sharedmain"
 )
 
@@ -31,8 +33,9 @@ import (
 const timeoutDuration = time.Minute
 
 func main() {
-	sharedmain.Main("controller",
-		framework.NewController(context.Background(), &resolver{}),
+	ctx := filteredinformerfactory.WithSelectors(context.Background(), v1alpha1.ManagedByLabelKey)
+	sharedmain.MainWithContext(ctx, "controller",
+		framework.NewController(ctx, &resolver{}),
 	)
 }
 
