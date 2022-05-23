@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package testing
+package framework
 
 import (
 	"context"
@@ -22,12 +22,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tektoncd/resolution/pkg/resolver/framework"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/tektoncd/resolution/pkg/apis/resolution/v1alpha1"
-	ttesting "github.com/tektoncd/resolution/pkg/reconciler/testing"
 	"github.com/tektoncd/resolution/test"
 	"github.com/tektoncd/resolution/test/diff"
 	"github.com/tektoncd/resolution/test/names"
@@ -53,11 +50,11 @@ var (
 // ResolutionRequestStatus and error, both of which can be nil. It instantiates a controller for that resolver and
 // reconciles the given request. It then checks for the expected error, if any, and compares the resulting status with
 // the expected status.
-func RunResolverReconcileTest(t *testing.T, d test.Data, resolver framework.Resolver, request *v1alpha1.ResolutionRequest,
+func RunResolverReconcileTest(ctx context.Context, t *testing.T, d test.Data, resolver Resolver, request *v1alpha1.ResolutionRequest,
 	expectedStatus *v1alpha1.ResolutionRequestStatus, expectedErr error) {
 	t.Helper()
 
-	testAssets, cancel := GetResolverFrameworkController(t, d, resolver, setClockOnReconciler)
+	testAssets, cancel := GetResolverFrameworkController(ctx, t, d, resolver, setClockOnReconciler)
 	defer cancel()
 
 	err := testAssets.Controller.Reconciler.Reconcile(testAssets.Ctx, getRequestName(request))
@@ -89,18 +86,17 @@ func RunResolverReconcileTest(t *testing.T, d test.Data, resolver framework.Reso
 
 // GetResolverFrameworkController returns an instance of the resolver framework controller/reconciler using the given resolver,
 // seeded with d, where d represents the state of the system (existing resources) needed for the test.
-func GetResolverFrameworkController(t *testing.T, d test.Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (test.Assets, func()) {
+func GetResolverFrameworkController(ctx context.Context, t *testing.T, d test.Data, resolver Resolver, modifiers ...ReconcilerModifier) (test.Assets, func()) {
 	t.Helper()
 	names.TestingSeed()
-	return initializeResolverFrameworkControllerAssets(t, d, resolver, modifiers...)
+	return initializeResolverFrameworkControllerAssets(ctx, t, d, resolver, modifiers...)
 }
 
-func initializeResolverFrameworkControllerAssets(t *testing.T, d test.Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (test.Assets, func()) {
-	ctx, _ := ttesting.SetupFakeContext(t)
+func initializeResolverFrameworkControllerAssets(ctx context.Context, t *testing.T, d test.Data, resolver Resolver, modifiers ...ReconcilerModifier) (test.Assets, func()) {
 	ctx, cancel := context.WithCancel(ctx)
 	c, informers := test.SeedTestData(t, ctx, d)
 	configMapWatcher := cminformer.NewInformedWatcher(c.Kube, system.Namespace())
-	ctl := framework.NewController(ctx, resolver, modifiers...)(ctx, configMapWatcher)
+	ctl := NewController(ctx, resolver, modifiers...)(ctx, configMapWatcher)
 	if err := configMapWatcher.Start(ctx.Done()); err != nil {
 		t.Fatalf("error starting configmap watcher: %v", err)
 	}
@@ -123,7 +119,7 @@ func getRequestName(rr *v1alpha1.ResolutionRequest) string {
 	return strings.Join([]string{rr.Namespace, rr.Name}, "/")
 }
 
-func setClockOnReconciler(r *framework.Reconciler) {
+func setClockOnReconciler(r *Reconciler) {
 	if r.Clock == nil {
 		r.Clock = testClock
 	}

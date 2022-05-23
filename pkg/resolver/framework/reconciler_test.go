@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package testing
+package framework
 
 import (
 	"encoding/base64"
@@ -24,9 +24,11 @@ import (
 
 	"github.com/tektoncd/resolution/pkg/apis/resolution/v1alpha1"
 	resolutioncommon "github.com/tektoncd/resolution/pkg/common"
+	ttesting "github.com/tektoncd/resolution/pkg/reconciler/testing"
 	"github.com/tektoncd/resolution/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+
 	_ "knative.dev/pkg/system/testing" // Setup system.Namespace()
 )
 
@@ -171,7 +173,8 @@ func TestReconcile(t *testing.T) {
 				fakeResolver.Timeout = tc.reconcilerTimeout
 			}
 
-			RunResolverReconcileTest(t, d, fakeResolver, tc.inputRequest, tc.expectedStatus, tc.expectedErr)
+			ctx, _ := ttesting.SetupFakeContext(t)
+			RunResolverReconcileTest(ctx, t, d, fakeResolver, tc.inputRequest, tc.expectedStatus, tc.expectedErr)
 		})
 	}
 }
