@@ -17,19 +17,40 @@
 package framework
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/tektoncd/resolution/pkg/apis/resolution/v1alpha1"
 	resolutioncommon "github.com/tektoncd/resolution/pkg/common"
 	ttesting "github.com/tektoncd/resolution/pkg/reconciler/testing"
 	"github.com/tektoncd/resolution/test"
+	"github.com/tektoncd/resolution/test/diff"
+	"github.com/tektoncd/resolution/test/names"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/client-go/tools/record"
+	"knative.dev/pkg/apis"
 	duckv1 "knative.dev/pkg/apis/duck/v1"
+	cminformer "knative.dev/pkg/configmap/informer"
+	"knative.dev/pkg/controller"
+	"knative.dev/pkg/logging"
+	pkgreconciler "knative.dev/pkg/reconciler"
+	"knative.dev/pkg/system"
 
 	_ "knative.dev/pkg/system/testing" // Setup system.Namespace()
+)
+
+var (
+	now                      = time.Date(2022, time.January, 1, 0, 0, 0, 0, time.UTC)
+	testClock                = clock.NewFakePassiveClock(now)
+	ignoreLastTransitionTime = cmpopts.IgnoreFields(apis.Condition{}, "LastTransitionTime.Inner.Time")
 )
 
 func TestReconcile(t *testing.T) {
@@ -174,7 +195,70 @@ func TestReconcile(t *testing.T) {
 			}
 
 			ctx, _ := ttesting.SetupFakeContext(t)
-			RunResolverReconcileTest(ctx, t, d, fakeResolver, tc.inputRequest, tc.expectedStatus, tc.expectedErr)
+			testAssets, cancel := getResolverFrameworkController(ctx, t, d, fakeResolver, setClockOnReconciler)
+			defer cancel()
+
+			err := testAssets.Controller.Reconciler.Reconcile(testAssets.Ctx, getRequestName(tc.inputRequest))
+			if tc.expectedErr != nil {
+				if err == nil {
+					t.Fatalf("expected to get error %v, but got nothing", tc.expectedErr)
+				}
+				if tc.expectedErr.Error() != err.Error() {
+					t.Fatalf("expected to get error %v, but got %v", tc.expectedErr, err)
+				}
+			} else {
+				if err != nil {
+					if ok, _ := controller.IsRequeueKey(err); !ok {
+						t.Fatalf("did not expect an error, but got %v", err)
+					}
+				}
+
+				c := testAssets.Clients.ResolutionRequests.ResolutionV1alpha1()
+				reconciledRR, err := c.ResolutionRequests(tc.inputRequest.Namespace).Get(testAssets.Ctx, tc.inputRequest.Name, metav1.GetOptions{})
+				if err != nil {
+					t.Fatalf("getting updated ResolutionRequest: %v", err)
+				}
+				if d := cmp.Diff(*tc.expectedStatus, reconciledRR.Status, ignoreLastTransitionTime); d != "" {
+					t.Errorf("ResolutionRequest status doesn't match %s", diff.PrintWantGot(d))
+
+				}
+			}
 		})
+	}
+}
+
+func getResolverFrameworkController(ctx context.Context, t *testing.T, d test.Data, resolver Resolver, modifiers ...ReconcilerModifier) (test.Assets, func()) {
+	t.Helper()
+	names.TestingSeed()
+
+	ctx, cancel := context.WithCancel(ctx)
+	c, informers := test.SeedTestData(t, ctx, d)
+	configMapWatcher := cminformer.NewInformedWatcher(c.Kube, system.Namespace())
+	ctl := NewController(ctx, resolver, modifiers...)(ctx, configMapWatcher)
+	if err := configMapWatcher.Start(ctx.Done()); err != nil {
+		t.Fatalf("error starting configmap watcher: %v", err)
+	}
+
+	if la, ok := ctl.Reconciler.(pkgreconciler.LeaderAware); ok {
+		_ = la.Promote(pkgreconciler.UniversalBucket(), func(pkgreconciler.Bucket, types.NamespacedName) {})
+	}
+
+	return test.Assets{
+		Logger:     logging.FromContext(ctx),
+		Controller: ctl,
+		Clients:    c,
+		Informers:  informers,
+		Recorder:   controller.GetEventRecorder(ctx).(*record.FakeRecorder),
+		Ctx:        ctx,
+	}, cancel
+}
+
+func getRequestName(rr *v1alpha1.ResolutionRequest) string {
+	return strings.Join([]string{rr.Namespace, rr.Name}, "/")
+}
+
+func setClockOnReconciler(r *Reconciler) {
+	if r.Clock == nil {
+		r.Clock = testClock
 	}
 }
