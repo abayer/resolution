@@ -66,21 +66,20 @@ func RunResolverReconcileTest(ctx context.Context, t *testing.T, d test.Data, re
 		if expectedErr.Error() != err.Error() {
 			t.Fatalf("expected to get error %v, but got %v", expectedErr, err)
 		}
-	} else {
-		if err != nil {
-			if ok, _ := controller.IsRequeueKey(err); !ok {
-				t.Fatalf("did not expect an error, but got %v", err)
-			}
+	} else if err != nil {
+		if ok, _ := controller.IsRequeueKey(err); !ok {
+			t.Fatalf("did not expect an error, but got %v", err)
 		}
+	}
 
-		c := testAssets.Clients.ResolutionRequests.ResolutionV1alpha1()
-		reconciledRR, err := c.ResolutionRequests(request.Namespace).Get(testAssets.Ctx, request.Name, metav1.GetOptions{})
-		if err != nil {
-			t.Fatalf("getting updated ResolutionRequest: %v", err)
-		}
+	c := testAssets.Clients.ResolutionRequests.ResolutionV1alpha1()
+	reconciledRR, err := c.ResolutionRequests(request.Namespace).Get(testAssets.Ctx, request.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("getting updated ResolutionRequest: %v", err)
+	}
+	if expectedStatus != nil {
 		if d := cmp.Diff(*expectedStatus, reconciledRR.Status, ignoreLastTransitionTime); d != "" {
 			t.Errorf("ResolutionRequest status doesn't match %s", diff.PrintWantGot(d))
-
 		}
 	}
 }
@@ -94,6 +93,7 @@ func GetResolverFrameworkController(ctx context.Context, t *testing.T, d test.Da
 }
 
 func initializeResolverFrameworkControllerAssets(ctx context.Context, t *testing.T, d test.Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (test.Assets, func()) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(ctx)
 	c, informers := test.SeedTestData(t, ctx, d)
 	configMapWatcher := cminformer.NewInformedWatcher(c.Kube, system.Namespace())
