@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-package testing
+package test
 
 import (
 	"context"
@@ -26,7 +26,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/tektoncd/resolution/pkg/apis/resolution/v1alpha1"
 	"github.com/tektoncd/resolution/pkg/resolver/framework"
-	"github.com/tektoncd/resolution/test"
 	"github.com/tektoncd/resolution/test/diff"
 	"github.com/tektoncd/resolution/test/names"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,7 +50,7 @@ var (
 // ResolutionRequestStatus and error, both of which can be nil. It instantiates a controller for that resolver and
 // reconciles the given request. It then checks for the expected error, if any, and compares the resulting status with
 // the expected status.
-func RunResolverReconcileTest(ctx context.Context, t *testing.T, d test.Data, resolver framework.Resolver, request *v1alpha1.ResolutionRequest,
+func RunResolverReconcileTest(ctx context.Context, t *testing.T, d Data, resolver framework.Resolver, request *v1alpha1.ResolutionRequest,
 	expectedStatus *v1alpha1.ResolutionRequestStatus, expectedErr error) {
 	t.Helper()
 
@@ -86,16 +85,16 @@ func RunResolverReconcileTest(ctx context.Context, t *testing.T, d test.Data, re
 
 // GetResolverFrameworkController returns an instance of the resolver framework controller/reconciler using the given resolver,
 // seeded with d, where d represents the state of the system (existing resources) needed for the test.
-func GetResolverFrameworkController(ctx context.Context, t *testing.T, d test.Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (test.Assets, func()) {
+func GetResolverFrameworkController(ctx context.Context, t *testing.T, d Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (Assets, func()) {
 	t.Helper()
 	names.TestingSeed()
 	return initializeResolverFrameworkControllerAssets(ctx, t, d, resolver, modifiers...)
 }
 
-func initializeResolverFrameworkControllerAssets(ctx context.Context, t *testing.T, d test.Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (test.Assets, func()) {
+func initializeResolverFrameworkControllerAssets(ctx context.Context, t *testing.T, d Data, resolver framework.Resolver, modifiers ...framework.ReconcilerModifier) (Assets, func()) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(ctx)
-	c, informers := test.SeedTestData(t, ctx, d)
+	c, informers := SeedTestData(t, ctx, d)
 	configMapWatcher := cminformer.NewInformedWatcher(c.Kube, system.Namespace())
 	ctl := framework.NewController(ctx, resolver, modifiers...)(ctx, configMapWatcher)
 	if err := configMapWatcher.Start(ctx.Done()); err != nil {
@@ -106,7 +105,7 @@ func initializeResolverFrameworkControllerAssets(ctx context.Context, t *testing
 		_ = la.Promote(pkgreconciler.UniversalBucket(), func(pkgreconciler.Bucket, types.NamespacedName) {})
 	}
 
-	return test.Assets{
+	return Assets{
 		Logger:     logging.FromContext(ctx),
 		Controller: ctl,
 		Clients:    c,

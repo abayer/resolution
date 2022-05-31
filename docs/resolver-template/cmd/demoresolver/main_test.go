@@ -24,7 +24,6 @@ import (
 	"github.com/tektoncd/resolution/pkg/apis/resolution/v1alpha1"
 	resolutioncommon "github.com/tektoncd/resolution/pkg/common"
 	ttesting "github.com/tektoncd/resolution/pkg/reconciler/testing"
-	frtesting "github.com/tektoncd/resolution/pkg/resolver/framework/testing"
 	"github.com/tektoncd/resolution/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "knative.dev/pkg/system/testing"
@@ -63,5 +62,5 @@ func TestResolver(t *testing.T) {
 	// If you want to test scenarios where an error should occur, pass a non-nil error to RunResolverReconcileTest
 	var expectedErr error
 
-	frtesting.RunResolverReconcileTest(ctx, t, d, r, request, expectedStatus, expectedErr)
+	test.RunResolverReconcileTest(ctx, t, d, r, request, expectedStatus, expectedErr)
 }

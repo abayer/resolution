@@ -19,7 +19,6 @@ import (
 	resolutioncommon "github.com/tektoncd/resolution/pkg/common"
 	ttesting "github.com/tektoncd/resolution/pkg/reconciler/testing"
 	"github.com/tektoncd/resolution/pkg/resolver/framework"
-	frtesting "github.com/tektoncd/resolution/pkg/resolver/framework/testing"
 	"github.com/tektoncd/resolution/test"
 	"github.com/tektoncd/resolution/test/diff"
 	corev1 "k8s.io/api/core/v1"
@@ -442,7 +441,7 @@ func TestController(t *testing.T) {
 				ResolutionRequests: []*v1alpha1.ResolutionRequest{request},
 			}
 
-			frtesting.RunResolverReconcileTest(ctx, t, d, resolver, request, expectedStatus, tc.expectedErr)
+			test.RunResolverReconcileTest(ctx, t, d, resolver, request, expectedStatus, tc.expectedErr)
 		})
 	}
 }
